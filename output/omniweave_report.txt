@@ -1,103 +1,98 @@
-OMNIWEAVE EXECUTION REPORT
-==============================
-User goal: Analyze this CSV dataset and create a report.
+OmniWeave Execution Report
 
-Results:
-
-step_1:
 {
-  "success": true,
-  "file_path": "C:\\Users\\syogi\\OneDrive\\Desktop\\OmniWeave\\data\\sales.csv",
-  "columns": [],
-  "row_count": 6,
-  "content": [
-    {
-      "null": [
-        "product",
-        "previous_sales",
-        "current_sales"
-      ]
-    },
-    {
-      "null": [
-        "Laptop",
-        "120",
-        "80"
-      ]
-    },
-    {
-      "null": [
-        "Phone",
-        "200",
-        "190"
-      ]
-    },
-    {
-      "null": [
-        "Tablet",
-        "150",
-        "90"
-      ]
-    },
-    {
-      "null": [
-        "Headphones",
-        "100",
-        "40"
-      ]
-    },
-    {
-      "null": [
-        "Keyboard",
-        "80",
-        "85"
-      ]
-    }
-  ]
-}
-
-step_2:
-{
-  "success": true,
-  "file_path": "C:\\Users\\syogi\\OneDrive\\Desktop\\OmniWeave\\data\\sales.csv",
-  "row_count": 6,
-  "columns": [],
-  "numeric_summary": {},
-  "sample_rows": [
-    {
-      "null": [
-        "product",
-        "previous_sales",
-        "current_sales"
-      ]
-    },
-    {
-      "null": [
-        "Laptop",
-        "120",
-        "80"
-      ]
-    },
-    {
-      "null": [
-        "Phone",
-        "200",
-        "190"
-      ]
-    },
-    {
-      "null": [
-        "Tablet",
-        "150",
-        "90"
-      ]
-    },
-    {
-      "null": [
-        "Headphones",
-        "100",
-        "40"
-      ]
-    }
-  ]
+  "step_1": {
+    "success": true,
+    "file_path": "data\\sales.csv",
+    "columns": [],
+    "row_count": 6,
+    "content": [
+      {
+        "null": [
+          "product",
+          "previous_sales",
+          "current_sales"
+        ]
+      },
+      {
+        "null": [
+          "Laptop",
+          "120",
+          "80"
+        ]
+      },
+      {
+        "null": [
+          "Phone",
+          "200",
+          "190"
+        ]
+      },
+      {
+        "null": [
+          "Tablet",
+          "150",
+          "90"
+        ]
+      },
+      {
+        "null": [
+          "Headphones",
+          "100",
+          "40"
+        ]
+      },
+      {
+        "null": [
+          "Keyboard",
+          "80",
+          "85"
+        ]
+      }
+    ]
+  },
+  "step_2": {
+    "success": true,
+    "file_path": "data\\sales.csv",
+    "row_count": 6,
+    "columns": [],
+    "numeric_summary": {},
+    "sample_rows": [
+      {
+        "null": [
+          "product",
+          "previous_sales",
+          "current_sales"
+        ]
+      },
+      {
+        "null": [
+          "Laptop",
+          "120",
+          "80"
+        ]
+      },
+      {
+        "null": [
+          "Phone",
+          "200",
+          "190"
+        ]
+      },
+      {
+        "null": [
+          "Tablet",
+          "150",
+          "90"
+        ]
+      },
+      {
+        "null": [
+          "Headphones",
+          "100",
+          "40"
+        ]
+      }
+    ]
+  }
 }

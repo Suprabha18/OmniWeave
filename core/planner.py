@@ -1,43 +1,43 @@
 
-from copy import deepcopy
+"""Main planner for OmniWeave."""
+
 from core.goal_interpreter import interpret_goal
+from core.domain_resolver import resolve_domain
+from core.intent_resolver import resolve_intent
+from core.plan_builder import build_file_workflow
+from core.plan_validator import validate_plan as validate_execution_plan
+from tools.registry import list_tools
 
 
-DEFAULT_TOOLS = [
-    {
-        "name": "read_file",
-        "description": "Read text or data from a supported input file.",
-        "input_schema": {"file_path": "string"},
-    },
-    {
-        "name": "analyze_csv",
-        "description": (
-            "Analyze CSV datasets and calculate statistics, "
-            "comparisons, and changes."
-        ),
-        "input_schema": {"file_path": "string"},
-    },
-    {
-        "name": "create_report",
-        "description": "Create and save a report to a file.",
-        "input_schema": {
-            "content": "string",
-            "output_path": "string",
-        },
-    },
-    {
-        "name": "read_saved_report",
-        "description": "Read a previously saved report for verification.",
-        "input_schema": {"file_path": "string"},
-    },
-]
+DOMAIN_CUES = {
+    "education": (
+        "learn", "learning", "study", "course", "courses",
+        "college", "colleges", "university", "universities",
+        "school", "schools", "scholarship", "scholarships",
+        "admission", "degree", "degrees", "student", "students",
+        "teach", "tutorial", "exam", "education",
+    ),
+    "healthcare": (
+        "hospital", "hospitals", "clinic", "clinics", "doctor",
+        "doctors", "medical", "healthcare", "health care",
+        "cardiology", "cardiologist", "cardiac", "appointment",
+        "appointments", "patient", "patients", "treatment",
+    ),
+}
+
+FILE_TASK_CUES = (
+    "analyze", "analyse", "analysis", "statistics", "trend",
+    "calculate", "csv", "dataset", "comparison",
+)
 
 
 def normalize_tools(tools=None):
-    """Return tool descriptions in a consistent format."""
+    """Discover registered tools or normalize supplied definitions."""
+
+    source = list_tools() if tools is None else tools
     normalized = []
 
-    for tool in tools if tools is not None else DEFAULT_TOOLS:
+    for tool in source:
         if not isinstance(tool, dict) or not tool.get("name"):
             continue
 
@@ -45,26 +45,30 @@ def normalize_tools(tools=None):
             "name": tool["name"],
             "description": tool.get("description", ""),
             "input_schema": tool.get("input_schema", {}),
+            "domains": tool.get("domains", []),
+            "intents": tool.get("intents", []),
         })
 
     return normalized
 
 
 def find_tool(tools, keywords):
-    """Find a tool using its name and description."""
+    """Find a tool by its name and description."""
+
     for tool in tools:
-        searchable_text = (
+        searchable = (
             tool["name"] + " " + tool["description"]
         ).lower()
 
-        if all(keyword.lower() in searchable_text for keyword in keywords):
+        if all(word.lower() in searchable for word in keywords):
             return tool
 
     return None
 
 
 def make_step(step_id, tool, arguments, purpose, dependencies=None):
-    """Create a step using the shared plan structure."""
+    """Create a consistently structured plan step."""
+
     return {
         "step_id": step_id,
         "tool_name": tool["name"],
@@ -78,60 +82,32 @@ def make_step(step_id, tool, arguments, purpose, dependencies=None):
 
 
 def validate_plan(plan, available_tool_names):
-    """Check tool names, step IDs, and dependency references."""
-    errors = []
-    steps = plan.get("steps", [])
-    step_ids = [step["step_id"] for step in steps]
+    """Keep the existing planner validation interface."""
 
-    if len(step_ids) != len(set(step_ids)):
-        errors.append("Step IDs must be unique.")
+    tools = [
+        {"name": name, "input_schema": {}}
+        for name in available_tool_names
+    ]
 
-    known_ids = set()
-
-    for step in steps:
-        step_id = step.get("step_id")
-
-        if step.get("tool_name") not in available_tool_names:
-            errors.append(
-                f"Unavailable tool: {step.get('tool_name')}"
-            )
-
-        for dependency in step.get("dependencies", []):
-            if dependency not in known_ids:
-                errors.append(
-                    f"Dependency {dependency} must appear "
-                    f"before step {step_id}."
-                )
-
-        known_ids.add(step_id)
-
-    return errors
+    return validate_execution_plan(plan, tools)
 
 
-def create_plan(
-    goal,
-    input_text=None,
-    attachments=None,
-    constraints=None,
-    available_tools=None,
-):
-    """
-    Build an execution plan from the goal and available tools.
+def detect_domain_cues(goal):
+    """Identify domain keywords present in a goal."""
 
-    This version uses deterministic rules. It does not claim to
-    understand or execute tasks for which no suitable tool exists.
-    """
-    interpreted = interpret_goal(
-        goal=goal,
-        input_text=input_text,
-        attachments=attachments,
-        constraints=constraints,
-    )
+    text = goal.lower()
 
-    tools = normalize_tools(available_tools)
-    tool_names = {tool["name"] for tool in tools}
+    return [
+        domain
+        for domain, phrases in DOMAIN_CUES.items()
+        if any(phrase in text for phrase in phrases)
+    ]
 
-    plan = {
+
+def _base_plan(interpreted):
+    """Build the shared plan structure."""
+
+    return {
         "goal": interpreted["goal"],
         "status": "ready",
         "steps": [],
@@ -142,138 +118,146 @@ def create_plan(
             interpreted["clarification_questions"]
         ),
         "errors": [],
+        "validation_errors": [],
+        "domain": None,
+        "intent": None,
     }
+
+
+def _route_domain_goal(plan, goal, domain, tools):
+    """Classify a domain goal and check registered capabilities."""
+
+    domain_result = resolve_domain(goal)
+    plan["domain_result"] = domain_result
+
+    if domain_result.get("status") != "resolved":
+        plan["status"] = "needs_clarification"
+        plan["clarification_questions"].append(
+            domain_result.get(
+                "message",
+                "Please clarify whether the goal concerns "
+                "Education or Healthcare.",
+            )
+        )
+        return plan
+
+    domain = domain_result["domain"]
+    plan["domain"] = domain
+
+    intent_result = resolve_intent(goal, domain)
+    plan["intent_result"] = intent_result
+
+    if intent_result.get("status") != "resolved":
+        plan["status"] = "needs_clarification"
+        plan["clarification_questions"].append(
+            intent_result.get(
+                "message",
+                "Please clarify the action you want to perform.",
+            )
+        )
+        return plan
+
+    intent = intent_result["intent"]
+    plan["intent"] = intent
+
+    capability_tool = next(
+        (
+            tool for tool in tools
+            if domain in tool.get("domains", [])
+            and intent in tool.get("intents", [])
+        ),
+        None,
+    )
+
+    if capability_tool is None:
+        plan["status"] = "unsupported"
+        plan["errors"].append(
+            f"No registered tool supports {domain} / {intent} yet."
+        )
+        return plan
+
+    plan["status"] = "needs_planning"
+    plan["errors"].append(
+        f"Tool '{capability_tool['name']}' declares support for "
+        f"{domain} / {intent}, but automatic argument construction "
+        "for this action is not implemented yet."
+    )
+
+    return plan
+
+
+def create_plan(
+    goal,
+    input_text=None,
+    attachments=None,
+    constraints=None,
+    available_tools=None,
+):
+    """
+    Interpret a goal, route it, build a workflow, and validate it.
+    """
+
+    interpreted = interpret_goal(
+        goal=goal,
+        input_text=input_text,
+        attachments=attachments,
+        constraints=constraints,
+    )
+
+    plan = _base_plan(interpreted)
+    tools = normalize_tools(available_tools)
+    tool_names = {tool["name"] for tool in tools}
 
     if interpreted["status"] == "needs_clarification":
         plan["status"] = "needs_clarification"
         return plan
 
-    goal_text = interpreted["goal"].lower()
+    goal_text = interpreted["goal"]
     files = interpreted["input_files"]
 
-    wants_report = any(
-        word in goal_text
-        for word in ("report", "save", "document", "write-up")
-    )
-
-    wants_analysis = any(
-        word in goal_text
-        for word in (
-            "analyze", "analyse", "analysis", "calculate",
-            "compare", "comparison", "statistics", "trend",
-            "decline", "increase", "decrease",
+    # Prefer file planning when the user supplied files and the
+    # request explicitly asks to analyze or calculate from them.
+    is_file_task = (
+        bool(files)
+        and any(
+            cue in goal_text.lower()
+            for cue in FILE_TASK_CUES
         )
     )
 
-    csv_files = [
-        path for path in files
-        if path.lower().endswith(".csv")
-    ]
+    domain_cues = detect_domain_cues(goal_text)
 
-    step_number = 1
-    source_step_ids = []
+    if domain_cues and not is_file_task:
+        plan = _route_domain_goal(
+            plan,
+            goal_text,
+            domain_cues[0],
+            tools,
+        )
+        return plan
 
-    # Read provided files when a suitable reader is available.
-    if files:
-        reader = find_tool(tools, ["read_file"])
-
-        if reader is None:
-            plan["errors"].append(
-                "Input files were provided, but no file-reading "
-                "tool is available."
-            )
-        else:
-            for file_path in files:
-                step_id = f"step_{step_number}"
-
-                plan["steps"].append(make_step(
-                    step_id=step_id,
-                    tool=reader,
-                    arguments={"file_path": file_path},
-                    purpose=f"Read input file: {file_path}",
-                ))
-
-                source_step_ids.append(step_id)
-                step_number += 1
-
-    # Use a CSV analyzer only when CSV analysis is relevant.
-    if wants_analysis and csv_files:
-        analyzer = find_tool(tools, ["analyze_csv"])
-
-        if analyzer is None:
-            plan["errors"].append(
-                "CSV analysis was requested, but no suitable "
-                "CSV analysis tool is available."
-            )
-        else:
-            for file_path in csv_files:
-                step_id = f"step_{step_number}"
-
-                plan["steps"].append(make_step(
-                    step_id=step_id,
-                    tool=analyzer,
-                    arguments={"file_path": file_path},
-                    purpose=f"Analyze dataset: {file_path}",
-                    dependencies=[
-                        source_step_ids[csv_files.index(file_path)]
-                    ] if source_step_ids else [],
-                ))
-
-                source_step_ids.append(step_id)
-                step_number += 1
-
-    # A report can be saved only if a report-writing tool exists.
-    if wants_report:
-        report_tool = find_tool(tools, ["create_report"])
-
-        if report_tool is None:
-            plan["errors"].append(
-                "A report was requested, but no report-writing "
-                "tool is available."
-            )
-        else:
-            report_id = f"step_{step_number}"
-
-            plan["steps"].append(make_step(
-                step_id=report_id,
-                tool=report_tool,
-                arguments={
-                    "content": (
-                        "Use the outputs of the preceding steps "
-                        "to prepare the requested report."
-                    ),
-                    "output_path": "output/omniweave_report.txt",
-                },
-                purpose="Create and save the requested report.",
-                dependencies=source_step_ids.copy(),
-            ))
-
-            step_number += 1
-
-            verifier = find_tool(tools, ["read_saved_report"])
-
-            if verifier:
-                plan["steps"].append(make_step(
-                    step_id=f"step_{step_number}",
-                    tool=verifier,
-                    arguments={
-                        "file_path": "output/omniweave_report.txt"
-                    },
-                    purpose="Verify that the saved report can be read.",
-                    dependencies=[report_id],
-                ))
-
-    # Prevent an unsupported goal from receiving a false success status.
-    if plan["errors"]:
-        plan["status"] = "unsupported"
-    elif not plan["steps"]:
-        plan["status"] = "needs_planning"
-
-    plan["validation_errors"] = validate_plan(
-        plan, tool_names
+    # Use the reusable builder instead of duplicating file workflow
+    # construction inside the main planner.
+    built_plan = build_file_workflow(
+        goal=goal_text,
+        input_files=files,
+        available_tools=tools,
     )
 
-    if plan["validation_errors"]:
-        plan["status"] = "invalid_plan"
+    plan["steps"] = built_plan.get("steps", [])
+    plan["status"] = built_plan.get("status", "needs_planning")
+    plan["errors"].extend(built_plan.get("errors", []))
+    plan["validation_errors"] = built_plan.get(
+        "validation_errors", []
+    )
+
+    if plan["status"] == "ready":
+        plan["validation_errors"] = validate_execution_plan(
+            plan,
+            tools,
+        )
+
+        if plan["validation_errors"]:
+            plan["status"] = "invalid_plan"
 
     return plan

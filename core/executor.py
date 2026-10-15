@@ -1,27 +1,21 @@
-
 import json
-from pathlib import Path
 
-from tools.mcp_client import client
+from tools.registry import execute_tool
 
 
 def _resolve_references(value, results):
-    """
-    Resolve references such as:
-    {"$ref": "step_2"}
+    """Resolve references such as {'$ref': 'step_1'} recursively."""
 
-    References can be nested inside dictionaries or lists.
-    """
     if isinstance(value, dict):
         if set(value.keys()) == {"$ref"}:
-            step_id = value["$ref"]
+            ref = value["$ref"]
 
-            if step_id not in results:
+            if ref not in results:
                 raise ValueError(
-                    f"Result for {step_id} is not available."
+                    f"Reference '{ref}' has no successful result."
                 )
 
-            return results[step_id]
+            return results[ref]
 
         return {
             key: _resolve_references(item, results)
@@ -37,192 +31,212 @@ def _resolve_references(value, results):
     return value
 
 
-def _build_report(goal, results):
-    """Build report content from actual successful tool results."""
-    sections = [
-        "OMNIWEAVE EXECUTION REPORT",
-        "=" * 30,
-        f"User goal: {goal}",
-        "",
-        "Results:",
-    ]
+def _call_tool(tool_name, arguments, tool_client=None):
+    """Support both the test client and the local tool registry."""
 
-    for step_id, result in results.items():
-        sections.extend([
-            "",
-            f"{step_id}:",
-            json.dumps(result, indent=2, ensure_ascii=False, default=str),
-        ])
+    if tool_client is not None:
+        return tool_client.call_tool(tool_name, arguments)
 
-    return "\n".join(sections)
+    return execute_tool(tool_name, arguments)
 
 
 def execute_plan(plan, tool_client=None):
-    """
-    Execute a plan sequentially, respecting dependencies.
-
-    Stops after a tool failure. Results from completed steps
-    are retained for debugging and reporting.
-    """
-    tool_client = tool_client or client
-
-    execution = {
-        "status": "running",
-        "goal": plan.get("goal", ""),
-        "step_results": {},
-        "errors": [],
-        "completed_steps": [],
-        "failed_step": None,
-        "report_verified": False,
-    }
-
-    if plan.get("status") != "ready":
-        execution["status"] = "not_started"
-        execution["errors"].append(
-            f"Plan is not ready: {plan.get('status')}"
-        )
-        return execution
+    """Execute a plan and return structured execution details."""
 
     steps = plan.get("steps", [])
-    known_ids = set()
-    seen_ids = set()
 
-    # Validate the entire dependency structure before execution.
-    for step in steps:
+    if plan.get("status") != "ready":
+        return {
+            "status": "not_started",
+            "message": "The plan is not ready for execution.",
+            "completed_steps": [],
+            "step_results": [],
+            "results": {},
+            "errors": [],
+            "failed_step": None,
+            "skipped_steps": [],
+            "report_verified": False,
+            "verified": False,
+        }
+
+    step_ids = [step.get("step_id") for step in steps]
+
+    if len(step_ids) != len(set(step_ids)):
+        return {
+            "status": "failed",
+            "message": "The plan contains duplicate step IDs.",
+            "completed_steps": [],
+            "step_results": [],
+            "results": {},
+            "errors": ["The plan contains duplicate step IDs."],
+            "failed_step": None,
+            "skipped_steps": [],
+            "report_verified": False,
+            "verified": False,
+        }
+
+    results = {}
+    step_results = []
+    completed_steps = []
+    errors = []
+    skipped_steps = []
+    failed_step = None
+
+    for index, step in enumerate(steps):
         step_id = step.get("step_id")
         tool_name = step.get("tool_name")
-
-        if not step_id or step_id in known_ids:
-            execution["status"] = "invalid_plan"
-            execution["errors"].append(
-                f"Missing or duplicate step ID: {step_id}"
-            )
-            return execution
-
-        if not tool_name:
-            execution["status"] = "invalid_plan"
-            execution["errors"].append(
-                f"Step {step_id} has no tool name."
-            )
-            return execution
-
         dependencies = step.get("dependencies", [])
 
-        if not isinstance(dependencies, list):
-            execution["status"] = "invalid_plan"
-            execution["errors"].append(
-                f"Dependencies for {step_id} must be a list."
-            )
-            return execution
-
-        for dependency in dependencies:
-            if dependency not in known_ids:
-                execution["status"] = "invalid_plan"
-                execution["errors"].append(
-                    f"Dependency {dependency} must appear before "
-                    f"step {step_id}."
-                )
-                return execution
-
-        known_ids.add(step_id)
-
-    try:
-        available_names = {
-            tool["name"] for tool in tool_client.discover_tools()
-        }
-    except Exception as error:
-        execution["status"] = "failed"
-        execution["errors"].append(
-            f"Could not discover tools: {error}"
-        )
-        return execution
-
-    # Execute in plan order. The planner must put dependencies first.
-    for step in steps:
-        step_id = step["step_id"]
-        tool_name = step["tool_name"]
-        dependencies = step.get("dependencies", [])
-
-        if tool_name not in available_names:
-            execution["status"] = "failed"
-            execution["failed_step"] = step_id
-            execution["errors"].append(
-                f"Tool '{tool_name}' is not available."
-            )
-            break
-
-        if any(
-            dependency not in execution["completed_steps"]
+        missing_dependencies = [
+            dependency
             for dependency in dependencies
-        ):
-            execution["status"] = "failed"
-            execution["failed_step"] = step_id
-            execution["errors"].append(
-                f"Dependencies for {step_id} did not complete."
+            if dependency not in results
+        ]
+
+        if missing_dependencies:
+            error_message = (
+                "Dependencies did not complete successfully: "
+                + ", ".join(missing_dependencies)
             )
+
+            skipped_steps.append(step_id)
+            step_results.append({
+                "step_id": step_id,
+                "tool_name": tool_name,
+                "status": "skipped",
+                "error": error_message,
+            })
+
+            errors.append({
+                "step_id": step_id,
+                "error": error_message,
+            })
+
+            # Do not execute dependent or later steps.
+            for remaining_step in steps[index + 1:]:
+                remaining_id = remaining_step.get("step_id")
+                skipped_steps.append(remaining_id)
+
+                step_results.append({
+                    "step_id": remaining_id,
+                    "tool_name": remaining_step.get("tool_name"),
+                    "status": "skipped",
+                    "error": (
+                        "Not executed because an earlier step "
+                        "failed or was skipped."
+                    ),
+                })
+
             break
 
         try:
             arguments = _resolve_references(
                 step.get("arguments", {}),
-                execution["step_results"],
+                results,
             )
 
-            # The old planner uses placeholder report content.
-            # Replace it with actual outputs from previous steps.
+            # Include actual earlier results in the generated report.
             if (
                 tool_name == "create_report"
                 and isinstance(arguments, dict)
                 and isinstance(arguments.get("content"), str)
-                and arguments["content"].startswith(
-                    "Use the outputs of the preceding steps"
-                )
+                and "preceding steps" in arguments["content"].lower()
             ):
-                arguments["content"] = _build_report(
-                    execution["goal"],
-                    execution["step_results"],
+                arguments["content"] = (
+                    "OmniWeave Execution Report\n\n"
+                    + json.dumps(results, indent=2, default=str)
                 )
 
-            result = tool_client.call_tool(tool_name, arguments)
-
-            execution["step_results"][step_id] = result
-            execution["completed_steps"].append(step_id)
-
-            # Check that the final report can be read and is non-empty.
-            if tool_name == "read_saved_report":
-                if (
-                    not isinstance(result, dict)
-                    or not result.get("exists")
-                    or not str(result.get("content", "")).strip()
-                ):
-                    raise ValueError(
-                        "The saved report is missing or empty."
-                    )
-
-                execution["report_verified"] = True
-
-        except Exception as error:
-            execution["status"] = "failed"
-            execution["failed_step"] = step_id
-            execution["errors"].append(
-                f"Step {step_id} ({tool_name}) failed: {error}"
+            output = _call_tool(
+                tool_name,
+                arguments,
+                tool_client,
             )
+
+            if isinstance(output, dict) and output.get("success") is False:
+                raise RuntimeError(
+                    output.get("error", "The tool reported failure.")
+                )
+
+            results[step_id] = output
+            completed_steps.append(step_id)
+
+            step_results.append({
+                "step_id": step_id,
+                "tool_name": tool_name,
+                "status": "success",
+                "output": output,
+            })
+
+        except Exception as exc:
+            failed_step = step_id
+            error_message = str(exc)
+
+            errors.append({
+                "step_id": step_id,
+                "error": error_message,
+            })
+
+            step_results.append({
+                "step_id": step_id,
+                "tool_name": tool_name,
+                "status": "failed",
+                "error": error_message,
+            })
+
+            for remaining_step in steps[index + 1:]:
+                remaining_id = remaining_step.get("step_id")
+                skipped_steps.append(remaining_id)
+
+                step_results.append({
+                    "step_id": remaining_id,
+                    "tool_name": remaining_step.get("tool_name"),
+                    "status": "skipped",
+                    "error": (
+                        "Not executed because an earlier step failed."
+                    ),
+                })
+
             break
 
-    else:
-        execution["status"] = "completed"
+    all_successful = (
+        len(completed_steps) == len(steps)
+        and not errors
+    )
 
-    if execution["status"] == "completed":
-        report_steps = [
-            step for step in steps
-            if step.get("tool_name") == "create_report"
-        ]
+    report_read_results = [
+        item["output"]
+        for item in step_results
+        if (
+            item["tool_name"] == "read_saved_report"
+            and item["status"] == "success"
+        )
+    ]
 
-        if report_steps and not execution["report_verified"]:
-            execution["status"] = "completed_with_warnings"
-            execution["errors"].append(
-                "The report was created, but no successful "
-                "read-back verification step was completed."
-            )
+    report_verified = (
+        all_successful
+        and bool(report_read_results)
+        and all(
+            isinstance(output, dict)
+            and output.get("success") is True
+            and output.get("exists") is True
+            for output in report_read_results
+        )
+    )
 
-    return execution
+    return {
+        "status": "completed" if all_successful else "failed",
+        "message": (
+            "All plan steps completed."
+            if all_successful
+            else "Execution stopped because a step failed or was skipped."
+        ),
+        "completed_steps": completed_steps,
+        "step_results": step_results,
+        "results": results,
+        "errors": errors,
+        "failed_step": failed_step,
+        "skipped_steps": skipped_steps,
+        "report_verified": report_verified,
+        "verified": report_verified,
+    }
