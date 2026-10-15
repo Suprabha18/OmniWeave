@@ -16,7 +16,7 @@ class TestRecovery(unittest.TestCase):
         self.state_manager = StateManager(db_path)
         self.orchestrator = Orchestrator(
             state_manager=self.state_manager,
-            recovery_manager=RecoveryManager(max_retries=2)
+            recovery_manager=RecoveryManager(max_retries=2),
         )
 
         self.plan = {
@@ -29,10 +29,10 @@ class TestRecovery(unittest.TestCase):
                     "arguments": {},
                     "dependencies": [],
                     "expected_output": "Success",
-                    "acceptance_criteria": ["Tool succeeds"]
+                    "acceptance_criteria": ["Tool succeeds"],
                 }
             ],
-            "acceptance_criteria": ["Task completes"]
+            "acceptance_criteria": ["Task completes"],
         }
 
     def tearDown(self):
@@ -48,23 +48,21 @@ class TestRecovery(unittest.TestCase):
                 return {
                     "success": False,
                     "error": "Temporary tool failure",
-                    "retryable": True
+                    "retryable": True,
                 }
 
             return {
                 "success": True,
-                "output": {"message": "Operation completed"}
+                "output": {"message": "Operation completed"},
             }
 
-        result = self.orchestrator.execute_plan(
-            self.plan, fake_tool
-        )
+        result = self.orchestrator.execute_plan(self.plan, fake_tool)
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(calls["count"], 2)
         self.assertEqual(
             self.state_manager.get_completed_step_ids(result["task_id"]),
-            {"step_1"}
+            {"step_1"},
         )
 
     def test_does_not_repeat_completed_step_on_resume(self):
@@ -74,12 +72,11 @@ class TestRecovery(unittest.TestCase):
             calls["count"] += 1
             return {
                 "success": True,
-                "output": {"message": "Done"}
+                "output": {"message": "Done"},
             }
 
-        first = self.orchestrator.execute_plan(
-            self.plan, fake_tool
-        )
+        first = self.orchestrator.execute_plan(self.plan, fake_tool)
+
         self.assertEqual(first["status"], "completed")
         self.assertEqual(calls["count"], 1)
 
@@ -89,7 +86,7 @@ class TestRecovery(unittest.TestCase):
         second = self.orchestrator.execute_plan(
             self.plan,
             should_not_run,
-            task_id=first["task_id"]
+            task_id=first["task_id"],
         )
 
         self.assertEqual(second["status"], "completed")
@@ -103,12 +100,10 @@ class TestRecovery(unittest.TestCase):
             return {
                 "success": False,
                 "error": "Invalid arguments",
-                "retryable": False
+                "retryable": False,
             }
 
-        result = self.orchestrator.execute_plan(
-            self.plan, fake_tool
-        )
+        result = self.orchestrator.execute_plan(self.plan, fake_tool)
 
         self.assertEqual(result["status"], "failed")
         self.assertEqual(calls["count"], 1)
@@ -121,12 +116,10 @@ class TestRecovery(unittest.TestCase):
             return {
                 "success": False,
                 "error": "Temporary failure",
-                "retryable": True
+                "retryable": True,
             }
 
-        result = self.orchestrator.execute_plan(
-            self.plan, fake_tool
-        )
+        result = self.orchestrator.execute_plan(self.plan, fake_tool)
 
         self.assertEqual(result["status"], "failed")
         self.assertEqual(calls["count"], 3)
@@ -142,7 +135,7 @@ class TestRecovery(unittest.TestCase):
                     "arguments": {},
                     "dependencies": [],
                     "expected_output": "Success",
-                    "acceptance_criteria": []
+                    "acceptance_criteria": [],
                 },
                 {
                     "id": "step_2",
@@ -151,10 +144,10 @@ class TestRecovery(unittest.TestCase):
                     "arguments": {},
                     "dependencies": ["step_1"],
                     "expected_output": "Success",
-                    "acceptance_criteria": []
-                }
+                    "acceptance_criteria": [],
+                },
             ],
-            "acceptance_criteria": []
+            "acceptance_criteria": [],
         }
 
         invoked = []
@@ -164,18 +157,62 @@ class TestRecovery(unittest.TestCase):
             return {
                 "success": False,
                 "error": "Permanent failure",
-                "retryable": False
+                "retryable": False,
             }
 
-        result = self.orchestrator.execute_plan(
-            plan, fake_tool
-        )
+        result = self.orchestrator.execute_plan(plan, fake_tool)
 
         self.assertEqual(result["status"], "failed")
         self.assertEqual(invoked, ["first"])
         self.assertNotIn(
             "step_2",
-            self.state_manager.get_completed_step_ids(result["task_id"])
+            self.state_manager.get_completed_step_ids(result["task_id"]),
+        )
+
+    def test_dependency_executes_before_dependent_step(self):
+        execution_order = []
+
+        def fake_tool(tool_name, arguments):
+            execution_order.append(tool_name)
+            return {
+                "success": True,
+                "output": f"{tool_name} completed",
+            }
+
+        plan = {
+            "goal": "Test dependency ordering",
+            "steps": [
+                {
+                    "id": "step_1",
+                    "description": "Analyze data",
+                    "tool_name": "analyze_data",
+                    "arguments": {},
+                    "dependencies": [],
+                    "expected_output": "Analysis results",
+                    "acceptance_criteria": [],
+                },
+                {
+                    "id": "step_2",
+                    "description": "Generate report",
+                    "tool_name": "generate_report",
+                    "arguments": {},
+                    "dependencies": ["step_1"],
+                    "expected_output": "Report",
+                    "acceptance_criteria": [],
+                },
+            ],
+            "acceptance_criteria": [],
+        }
+
+        result = self.orchestrator.execute_plan(
+            plan,
+            invoke_tool=fake_tool,
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(
+            execution_order,
+            ["analyze_data", "generate_report"],
         )
 
 
