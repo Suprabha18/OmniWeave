@@ -9,15 +9,20 @@ TOOL_REGISTRY = {
         "input_schema": {
             "file_path": "string",
         },
+        "domains": [],
+        "intents": [],
     },
     "analyze_csv": {
         "function": demo_tools.analyze_csv,
         "description": (
-            "Analyze a CSV dataset and calculate numeric statistics."
+            "Analyze a CSV dataset and calculate numeric statistics, "
+            "comparisons, and changes."
         ),
         "input_schema": {
             "file_path": "string",
         },
+        "domains": [],
+        "intents": [],
     },
     "create_report": {
         "function": demo_tools.create_report,
@@ -26,6 +31,8 @@ TOOL_REGISTRY = {
             "content": "any",
             "output_path": "string",
         },
+        "domains": [],
+        "intents": [],
     },
     "read_saved_report": {
         "function": demo_tools.read_saved_report,
@@ -33,11 +40,15 @@ TOOL_REGISTRY = {
         "input_schema": {
             "file_path": "string",
         },
+        "domains": [],
+        "intents": [],
     },
     "simulate_failure": {
         "function": demo_tools.simulate_failure,
         "description": "Intentionally fail to test error recovery.",
         "input_schema": {},
+        "domains": [],
+        "intents": [],
     },
 }
 
@@ -50,6 +61,8 @@ def list_tools():
             "name": name,
             "description": details["description"],
             "input_schema": details["input_schema"],
+            "domains": details.get("domains", []),
+            "intents": details.get("intents", []),
         }
         for name, details in TOOL_REGISTRY.items()
     ]
@@ -71,7 +84,9 @@ def execute_tool(tool_name, arguments=None):
     arguments = arguments or {}
 
     if not isinstance(arguments, dict):
-        raise TypeError("Tool arguments must be provided as a dictionary.")
+        raise TypeError(
+            "Tool arguments must be provided as a dictionary."
+        )
 
     function = tool["function"]
     return function(**arguments)
