@@ -215,6 +215,37 @@ class TestRecovery(unittest.TestCase):
             ["analyze_data", "generate_report"],
         )
 
+    def test_task_state_persists_after_reopening_database(self):
+        task_id = self.state_manager.create_task(self.plan)
+
+        self.state_manager.update_step(
+            task_id=task_id,
+            step_id="step_1",
+            status="completed",
+            attempts=1,
+            result={"message": "Analysis completed"},
+        )
+
+        self.state_manager.set_task_status(task_id, "completed")
+
+        # Open a new StateManager using the same database file.
+        db_path = Path(self.temp_dir.name) / "test.db"
+        reopened_manager = StateManager(db_path)
+
+        saved_task = reopened_manager.get_task(task_id)
+        completed_steps = reopened_manager.get_completed_step_ids(task_id)
+
+        self.assertIsNotNone(saved_task)
+        self.assertEqual(saved_task["status"], "completed")
+        self.assertEqual(completed_steps, {"step_1"})
+
+        saved_steps = reopened_manager.get_steps(task_id)
+        step = next(s for s in saved_steps if s["step_id"] == "step_1")
+
+        self.assertEqual(step["status"], "completed")
+        self.assertEqual(step["attempts"], 1)
+        self.assertEqual(step["result"], {"message": "Analysis completed"})
+
 
 if __name__ == "__main__":
     unittest.main()
