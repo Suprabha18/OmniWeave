@@ -3,140 +3,550 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080a12">
+  <meta name="description" content="OmniWeave — an autonomous AI operator interface for planning, execution, recovery, and verification.">
   <title>OmniWeave | Autonomous AI Operator</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div class="app-shell">
+
+    <!-- SIDEBAR -->
     <aside class="sidebar">
       <a class="brand" href="#" data-page="home">
         <span class="brand-icon">✳</span>
-        <span>Omni<span class="accent">Weave</span>
+        <span>
+          Omni<span class="accent">Weave</span>
           <small>Autonomous AI Operator</small>
         </span>
       </a>
 
       <div class="side-label">WORKSPACE</div>
-      <nav id="navigation">
-        <button class="nav-item active" data-page="home">⌂ <span>Home</span></button>
-        <button class="nav-item" data-page="plan">◇ <span>Dynamic Plan</span></button>
-        <button class="nav-item" data-page="execution">◉ <span>Live Execution</span></button>
-        <button class="nav-item" data-page="results">▤ <span>Results &amp; Verification</span></button>
-        <button class="nav-item" data-page="tools">⌘ <span>Tools &amp; Activity</span></button>
+
+      <nav id="navigation" aria-label="Main navigation">
+        <button class="nav-item active" data-page="home" aria-current="page">
+          <span class="nav-icon">⌂</span>
+          <span>Home</span>
+        </button>
+
+        <button class="nav-item" data-page="plan">
+          <span class="nav-icon">◇</span>
+          <span>Dynamic Plan</span>
+        </button>
+
+        <button class="nav-item" data-page="execution">
+          <span class="nav-icon">◉</span>
+          <span>Live Execution</span>
+        </button>
+
+        <button class="nav-item" data-page="results">
+          <span class="nav-icon">▤</span>
+          <span>Results &amp; Verification</span>
+        </button>
+
+        <button class="nav-item" data-page="tools">
+          <span class="nav-icon">⌘</span>
+          <span>Tools &amp; Activity</span>
+        </button>
       </nav>
 
       <div class="sidebar-bottom">
-        <div class="connection"><span class="status-dot"></span> UI demo mode</div>
+        <div class="connection">
+          <span class="status-dot"></span>
+          UI demo mode
+        </div>
+
         <p>AI backend not connected</p>
-        <div class="user-card"><div class="avatar">OW</div><div>OmniWeave<small>Hackathon workspace</small></div></div>
+
+        <div class="user-card">
+          <div class="avatar">OW</div>
+          <div>
+            OmniWeave
+            <small>Hackathon workspace</small>
+          </div>
+        </div>
       </div>
     </aside>
 
+    <!-- MAIN CONTENT -->
     <main class="main-content">
+
+      <!-- TOP BAR -->
       <header class="topbar">
         <div>
           <div class="eyebrow">AUTONOMOUS WORKSPACE</div>
           <h2 id="page-heading">Welcome to OmniWeave</h2>
         </div>
-        <div class="topbar-right"><span class="demo-tag">● DEMO</span><div class="avatar">OW</div></div>
+
+        <div class="topbar-right">
+          <span class="demo-tag">● DEMO</span>
+          <div class="avatar">OW</div>
+        </div>
       </header>
 
       <div class="content">
 
+        <!-- SECTION 1: HOME -->
         <section class="page active" id="page-home">
+
           <div class="hero">
             <div class="eyebrow">INTELLIGENCE THAT TAKES ACTION</div>
-            <h1>From goal to <span class="gradient-text">done.</span></h1>
-            <p>Describe what you want to achieve. OmniWeave will help plan, execute, recover, and verify the work.</p>
-            <div class="hero-chips"><span>✳ Dynamic planning</span><span>↻ Recovery</span><span>✓ Independent verification</span></div>
+
+            <h1>
+              From goal to
+              <span class="gradient-text">done.</span>
+            </h1>
+
+            <p>
+              Describe what you want to achieve. OmniWeave will help
+              plan, execute, recover, and verify the work.
+            </p>
+
+            <div class="hero-chips">
+              <span>✳ Dynamic planning</span>
+              <span>↻ Recovery</span>
+              <span>✓ Independent verification</span>
+            </div>
           </div>
 
-          <div class="section-heading"><div><h3>What would you like to accomplish?</h3><p>Start with a goal in plain language.</p></div><span class="step-tag">STEP 01</span></div>
+          <div class="section-heading">
+            <div>
+              <h3>What would you like to accomplish?</h3>
+              <p>Start with a goal in plain language.</p>
+            </div>
+            <span class="step-tag">STEP 01</span>
+          </div>
 
+          <!-- GOAL INPUT -->
           <div class="panel goal-panel">
+
             <label for="goal-input">YOUR GOAL</label>
-            <textarea id="goal-input" rows="4" placeholder="Example: Analyze the sales CSV, identify the three products with the largest sales decline, create a report with evidence, and save it."></textarea>
+
+            <textarea
+              id="goal-input"
+              rows="4"
+              maxlength="3000"
+              placeholder="Example: Analyze student performance and healthcare appointment data, identify learning gaps and missed-appointment patterns, and recommend improvements with evidence."
+            ></textarea>
+
             <div class="input-footer">
               <span>Be specific about your desired outcome.</span>
-              <span id="char-count">0 characters</span>
+              <span id="char-count">0 / 3000</span>
             </div>
+
+            <!-- FILE UPLOAD -->
             <div class="upload-area">
               <div class="upload-icon">↥</div>
-              <div><strong>Attach supporting files</strong><p>CSV, TXT, JSON, PDF and other files</p></div>
-              <label class="button secondary upload-button" for="file-input">Browse files</label>
-              <input id="file-input" type="file" multiple accept=".csv,.txt,.json,.pdf,.md,.xlsx">
+
+              <div class="upload-copy">
+                <strong>Attach supporting files</strong>
+                <p>CSV, TXT, JSON, PDF and other files</p>
+              </div>
+
+              <label class="button secondary upload-button" for="file-input">
+                Browse files
+              </label>
+
+              <input
+                id="file-input"
+                type="file"
+                multiple
+                accept=".csv,.txt,.json,.pdf,.md,.xlsx"
+              >
             </div>
+
             <div id="file-list" class="file-list"></div>
+
             <div class="goal-actions">
-              <span class="muted">Your files stay in this browser session.</span>
-              <button id="generate-plan" class="button primary">Generate plan <span>→</span></button>
+              <span class="muted">
+                Your files stay in this browser session.
+              </span>
+
+              <button id="generate-plan" class="button primary">
+                Generate plan <span>→</span>
+              </button>
             </div>
           </div>
 
-          <div class="section-heading"><div><h3>How OmniWeave works</h3><p>A goal-driven workflow, from start to verified outcome.</p></div></div>
+          <!-- HOW IT WORKS -->
+          <div class="section-heading">
+            <div>
+              <h3>How OmniWeave works</h3>
+              <p>A goal-driven workflow, from start to verified outcome.</p>
+            </div>
+          </div>
+
           <div class="feature-grid">
-            <article class="panel feature"><span class="feature-icon purple">◇</span><h4>Plan intelligently</h4><p>Break a goal into ordered steps and identify suitable tools.</p></article>
-            <article class="panel feature"><span class="feature-icon blue">⌘</span><h4>Execute and recover</h4><p>Track actions and demonstrate recovery from simulated failures.</p></article>
-            <article class="panel feature"><span class="feature-icon green">✓</span><h4>Verify outcomes</h4><p>Show result checks and supporting evidence before declaring completion.</p></article>
+
+            <article class="panel feature">
+              <span class="feature-icon purple">◇</span>
+              <h4>Plan intelligently</h4>
+              <p>
+                Break a goal into ordered steps and identify suitable tools.
+              </p>
+            </article>
+
+            <article class="panel feature">
+              <span class="feature-icon blue">⌘</span>
+              <h4>Execute and recover</h4>
+              <p>
+                Track actions and demonstrate recovery from simulated failures.
+              </p>
+            </article>
+
+            <article class="panel feature">
+              <span class="feature-icon green">✓</span>
+              <h4>Verify outcomes</h4>
+              <p>
+                Show result checks and supporting evidence before declaring completion.
+              </p>
+            </article>
+
           </div>
         </section>
 
+        <!-- SECTION 2: DYNAMIC PLAN -->
         <section class="page" id="page-plan">
-          <div class="page-intro"><div class="eyebrow">STEP 02 · PLANNING</div><h1>Dynamic Plan</h1><p>Review the proposed workflow before running the demo.</p></div>
-          <div class="panel plan-summary"><div><span class="muted">CURRENT GOAL</span><h3 id="plan-goal">No goal submitted yet</h3></div><span class="pill purple-pill" id="plan-status">Draft</span></div>
-          <div class="section-heading"><div><h3>Execution steps</h3><p>Proposed sequence and tool assignments.</p></div><span id="step-count" class="pill">0 steps</span></div>
-          <div id="plan-steps" class="step-list"><div class="empty-state">Submit a goal on the Home page to create a demo plan.</div></div>
-          <div class="panel criteria-panel"><h3>Acceptance criteria</h3><p class="muted">The outcome should be checked against these conditions.</p><ul id="criteria-list"><li>Submit a goal to generate criteria.</li></ul></div>
-          <div class="action-row"><button class="button secondary" id="edit-plan">Edit goal</button><button class="button danger" id="cancel-plan">Cancel plan</button><button class="button primary" id="approve-plan">Approve &amp; execute →</button></div>
-          <p class="notice">Demo mode: the plan is a front-end example, not an AI-generated plan.</p>
+
+          <div class="page-intro">
+            <div class="eyebrow">STEP 02 · PLANNING</div>
+            <h1>Dynamic Plan</h1>
+            <p>Review the proposed workflow before running the demo.</p>
+          </div>
+
+          <div class="panel plan-summary">
+            <div>
+              <span class="muted">CURRENT GOAL</span>
+              <h3 id="plan-goal">No goal submitted yet</h3>
+            </div>
+
+            <span class="pill purple-pill" id="plan-status">Draft</span>
+          </div>
+
+          <div class="section-heading">
+            <div>
+              <h3>Execution steps</h3>
+              <p>Proposed sequence and tool assignments.</p>
+            </div>
+
+            <span id="step-count" class="pill">0 steps</span>
+          </div>
+
+          <div id="plan-steps" class="step-list">
+            <div class="empty-state">
+              Submit a goal on the Home page to create a demo plan.
+            </div>
+          </div>
+
+          <div class="panel criteria-panel">
+            <h3>Acceptance criteria</h3>
+            <p class="muted">
+              The outcome should be checked against these conditions.
+            </p>
+
+            <ul id="criteria-list">
+              <li>Submit a goal to generate criteria.</li>
+            </ul>
+          </div>
+
+          <div class="action-row">
+            <button class="button secondary" id="edit-plan">
+              Edit goal
+            </button>
+
+            <button class="button danger" id="cancel-plan">
+              Cancel plan
+            </button>
+
+            <button class="button primary" id="approve-plan" disabled>
+              Approve &amp; execute →
+            </button>
+          </div>
+
+          <p class="notice">
+            Demo mode: the plan is a front-end example, not an AI-generated plan.
+          </p>
         </section>
 
+        <!-- SECTION 3: LIVE EXECUTION -->
         <section class="page" id="page-execution">
-          <div class="page-intro"><div class="eyebrow">STEP 03 · ORCHESTRATION</div><h1>Live Execution</h1><p>Follow each step and watch the simulated recovery process.</p></div>
-          <div class="stats-grid">
-            <div class="panel stat"><span>OVERALL PROGRESS</span><strong id="progress-number">0%</strong><div class="progress-track"><div id="progress-bar" class="progress-fill"></div></div></div>
-            <div class="panel stat"><span>COMPLETED STEPS</span><strong id="completed-number">0 / 4</strong><small>Workflow steps</small></div>
-            <div class="panel stat"><span>RECOVERY EVENTS</span><strong id="recovery-number">0</strong><small>Simulated retries</small></div>
+
+          <div class="page-intro">
+            <div class="eyebrow">STEP 03 · ORCHESTRATION</div>
+            <h1>Live Execution</h1>
+            <p>
+              Follow each step and watch the simulated recovery process.
+            </p>
           </div>
-          <div class="panel execution-panel"><div class="panel-heading"><div><h3>Execution timeline</h3><p class="muted">Step-by-step activity</p></div><span class="pill" id="execution-status">Idle</span></div><div id="execution-steps" class="step-list"><div class="empty-state">Approve a plan to start the demo execution.</div></div></div>
-          <div class="panel log-panel"><h3>Live activity log</h3><div id="activity-log" class="activity-log"><p class="log-line"><span>●</span> Waiting for a plan to be approved.</p></div></div>
-          <div class="action-row"><button id="run-demo" class="button primary" disabled>Run demo execution →</button><button id="reset-demo" class="button secondary">Reset demo</button></div>
+
+          <div class="stats-grid">
+
+            <div class="panel stat">
+              <span>OVERALL PROGRESS</span>
+              <strong id="progress-number">0%</strong>
+
+              <div class="progress-track">
+                <div id="progress-bar" class="progress-fill"></div>
+              </div>
+            </div>
+
+            <div class="panel stat">
+              <span>COMPLETED STEPS</span>
+              <strong id="completed-number">0 / 4</strong>
+              <small>Workflow steps</small>
+            </div>
+
+            <div class="panel stat">
+              <span>RECOVERY EVENTS</span>
+              <strong id="recovery-number">0</strong>
+              <small>Simulated retries</small>
+            </div>
+
+          </div>
+
+          <div class="panel execution-panel">
+
+            <div class="panel-heading">
+              <div>
+                <h3>Execution timeline</h3>
+                <p class="muted">Step-by-step activity</p>
+              </div>
+
+              <span class="pill" id="execution-status">Idle</span>
+            </div>
+
+            <div id="execution-steps" class="step-list">
+              <div class="empty-state">
+                Approve a plan to start the demo execution.
+              </div>
+            </div>
+
+          </div>
+
+          <div class="panel log-panel">
+            <h3>Live activity log</h3>
+
+            <div id="activity-log" class="activity-log">
+              <p class="log-line">
+                <span class="log-bullet">●</span>
+                <span>Waiting for a plan to be approved.</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button id="run-demo" class="button primary" disabled>
+              Run demo execution →
+            </button>
+
+            <button id="reset-demo" class="button secondary">
+              Reset demo
+            </button>
+          </div>
+
         </section>
 
+        <!-- SECTION 4: RESULTS AND VERIFICATION -->
         <section class="page" id="page-results">
-          <div class="page-intro"><div class="eyebrow">STEP 04 · VALIDATION</div><h1>Results &amp; Verification</h1><p>Inspect the simulated output and the checks used to assess it.</p></div>
-          <div class="panel result-banner"><div class="result-symbol" id="result-symbol">◌</div><div><h3 id="result-heading">No results yet</h3><p id="result-description">Run the demo execution to see verification results.</p></div></div>
-          <div class="section-heading"><div><h3>Acceptance checks</h3><p>Evidence shown by the front-end demonstration.</p></div></div>
-          <div class="panel"><div id="verification-list" class="verification-list"><div class="empty-state">Verification checks will appear after demo execution.</div></div></div>
-          <div class="section-heading"><div><h3>Generated report preview</h3><p>Example report produced by the demo.</p></div><button id="download-report" class="button secondary" disabled>↓ Download report</button></div>
-          <div class="panel report-panel"><div class="report-header"><span>▤</span><div><strong>sales_analysis_report.md</strong><small>Markdown · demo output</small></div></div><pre id="report-preview">Your demo report will appear here after execution.</pre></div>
-          <p class="notice">Verification is simulated. No real calculations are performed on uploaded data in this UI-only version.</p>
+
+          <div class="page-intro">
+            <div class="eyebrow">STEP 04 · VALIDATION</div>
+            <h1>Results &amp; Verification</h1>
+            <p>
+              Inspect the simulated output and the checks used to assess it.
+            </p>
+          </div>
+
+          <div class="panel result-banner">
+
+            <div class="result-symbol" id="result-symbol">◌</div>
+
+            <div class="result-copy">
+              <h3 id="result-heading">No results yet</h3>
+              <p id="result-description">
+                Run the demo execution to see verification results.
+              </p>
+            </div>
+
+            <span class="result-status" id="result-status">
+              Awaiting run
+            </span>
+          </div>
+
+          <div class="section-heading">
+            <div>
+              <h3>Acceptance checks</h3>
+              <p>Evidence shown by the front-end demonstration.</p>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div id="verification-list" class="verification-list">
+              <div class="empty-state">
+                Verification checks will appear after demo execution.
+              </div>
+            </div>
+          </div>
+
+          <div class="section-heading report-section-heading">
+            <div>
+              <h3>Generated report preview</h3>
+              <p>Example report produced by the demo.</p>
+            </div>
+
+            <button id="download-report" class="button secondary" disabled>
+              ↓ Download report
+            </button>
+          </div>
+
+          <div class="panel report-panel">
+
+            <div class="report-header">
+              <span class="report-file-icon">▤</span>
+
+              <div>
+                <strong>omniweave_demo_report.md</strong>
+                <small>Markdown · demo output</small>
+              </div>
+
+              <span class="file-type">MD</span>
+            </div>
+
+            <pre id="report-preview">Your demo report will appear here after execution.</pre>
+          </div>
+
+          <p class="notice">
+            Verification is simulated. No real calculations are performed
+            on uploaded data in this UI-only version.
+          </p>
+
         </section>
 
+        <!-- SECTION 5: TOOLS AND ACTIVITY -->
         <section class="page" id="page-tools">
-          <div class="page-intro"><div class="eyebrow">SYSTEM · CAPABILITIES</div><h1>Tools &amp; Activity</h1><p>Inspect the demo tool registry and review the audit trail.</p></div>
+
+          <div class="page-intro">
+            <div class="eyebrow">SYSTEM · CAPABILITIES</div>
+            <h1>Tools &amp; Activity</h1>
+            <p>
+              Inspect the demo tool registry and review the audit trail.
+            </p>
+          </div>
+
           <div class="stats-grid">
-            <div class="panel stat"><span>AVAILABLE DEMO TOOLS</span><strong>5</strong><small>Example registry</small></div>
-            <div class="panel stat"><span>ACTIONS RECORDED</span><strong id="audit-count">0</strong><small>Current session</small></div>
-            <div class="panel stat"><span>BACKEND STATUS</span><strong class="backend-label">Offline</strong><small>UI-only prototype</small></div>
+
+            <div class="panel stat">
+              <span>AVAILABLE DEMO TOOLS</span>
+              <strong>5</strong>
+              <small>Example registry</small>
+            </div>
+
+            <div class="panel stat">
+              <span>ACTIONS RECORDED</span>
+              <strong id="audit-count">0</strong>
+              <small>Current session</small>
+            </div>
+
+            <div class="panel stat">
+              <span>BACKEND STATUS</span>
+              <strong class="backend-label">Offline</strong>
+              <small>UI-only prototype</small>
+            </div>
+
           </div>
-          <div class="section-heading"><div><h3>Tool registry</h3><p>Example tools intended for future backend integration.</p></div></div>
+
+          <div class="section-heading">
+            <div>
+              <h3>Tool registry</h3>
+              <p>Example tools intended for future backend integration.</p>
+            </div>
+          </div>
+
           <div class="panel tool-list">
-            <div class="tool-row"><span class="tool-icon">↧</span><div><strong>read_file</strong><p>Read an approved input file.</p></div><span class="pill">Demo</span></div>
-            <div class="tool-row"><span class="tool-icon">▦</span><div><strong>analyze_csv</strong><p>Analyze tabular data and calculate metrics.</p></div><span class="pill">Demo</span></div>
-            <div class="tool-row"><span class="tool-icon">▤</span><div><strong>create_report</strong><p>Generate a report from analysis results.</p></div><span class="pill">Demo</span></div>
-            <div class="tool-row"><span class="tool-icon">⌕</span><div><strong>read_saved_report</strong><p>Read a previously saved report for checking.</p></div><span class="pill">Demo</span></div>
-            <div class="tool-row"><span class="tool-icon">↻</span><div><strong>retry_action</strong><p>Demonstrate a retry after a simulated failure.</p></div><span class="pill">Demo</span></div>
+
+            <div class="tool-row">
+              <span class="tool-icon">↧</span>
+              <div>
+                <strong>read_file</strong>
+                <p>Read an approved input file.</p>
+              </div>
+              <span class="pill">Demo</span>
+            </div>
+
+            <div class="tool-row">
+              <span class="tool-icon">▦</span>
+              <div>
+                <strong>analyze_csv</strong>
+                <p>Analyze tabular data and calculate metrics.</p>
+              </div>
+              <span class="pill">Demo</span>
+            </div>
+
+            <div class="tool-row">
+              <span class="tool-icon">▤</span>
+              <div>
+                <strong>create_report</strong>
+                <p>Generate a report from analysis results.</p>
+              </div>
+              <span class="pill">Demo</span>
+            </div>
+
+            <div class="tool-row">
+              <span class="tool-icon">⌕</span>
+              <div>
+                <strong>read_saved_report</strong>
+                <p>Read a previously saved report for checking.</p>
+              </div>
+              <span class="pill">Demo</span>
+            </div>
+
+            <div class="tool-row">
+              <span class="tool-icon">↻</span>
+              <div>
+                <strong>retry_action</strong>
+                <p>Demonstrate a retry after a simulated failure.</p>
+              </div>
+              <span class="pill">Demo</span>
+            </div>
+
           </div>
-          <div class="section-heading"><div><h3>Audit trail</h3><p>Chronological record of demo interactions.</p></div><button id="clear-log" class="button secondary">Clear log</button></div>
-          <div id="audit-trail" class="panel audit-trail"><div class="empty-state">No activity recorded yet.</div></div>
+
+          <div class="section-heading">
+            <div>
+              <h3>Audit trail</h3>
+              <p>Chronological record of demo interactions.</p>
+            </div>
+
+            <button id="clear-log" class="button secondary">
+              Clear log
+            </button>
+          </div>
+
+          <div id="audit-trail" class="panel audit-trail">
+            <div class="empty-state">No activity recorded yet.</div>
+          </div>
+
         </section>
 
-        <footer>OmniWeave <span>·</span> Hackathon prototype <span>·</span> Front-end demo</footer>
+        <!-- FOOTER -->
+        <footer>
+          <span class="footer-brand">OmniWeave</span>
+          <span>·</span>
+          Hackathon prototype
+          <span>·</span>
+          Front-end demo
+        </footer>
+
       </div>
     </main>
   </div>
-  <div id="toast" class="toast" role="status"></div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- JAVASCRIPT -->
   <script src="script.js"></script>
+
 </body>
 </html>
