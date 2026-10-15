@@ -227,11 +227,7 @@ class Orchestrator:
                         raw_result = invoke_tool(tool_name, arguments)
                         result = self._normalize_result(raw_result)
                     except Exception as exc:
-                        result = {
-                            "success": False,
-                            "error": f"{type(exc).__name__}: {exc}",
-                            "retryable": False
-                        }
+                     result = self.recovery_manager.classify_exception(exc)
 
                     self.state_manager.record_tool_call(
                         task_id,
@@ -286,15 +282,30 @@ class Orchestrator:
                         }
                     )
 
+                    source = (
+                        final_result.get("source")
+                        if final_result else None
+                    ) or ("mcp" if tool_name.startswith("mcp__") else "local")
+
                     self._emit(
                         event_callback, task_id, step_id, "completed",
                         f"Step completed: {step.get('description', step_id)}",
-                        result=final_result
+                        result=final_result,
+                        source=source,
+                        mcp_server=(
+                            final_result.get("mcp_server")
+                            if final_result else None
+                        ),
                     )
+                
                 else:
                     error = (
                         final_result.get("error", "Unknown failure")
                         if final_result else "No result returned"
+                    )
+                    suggestion = (
+                        final_result.get("recovery_suggestion")
+                        if final_result else None
                     )
 
                     self.state_manager.update_step(
@@ -305,13 +316,37 @@ class Orchestrator:
                         result=final_result,
                         error=error
                     )
-                    failures.append({
+                    failure = {
                         "step_id": step_id,
-                        "error": error
-                    })
+                        "tool_name": tool_name,
+                        "error": error,
+                        "attempts": attempts,
+                        "retryable": (
+                            final_result.get("retryable", False)
+                            if final_result else False
+                        ),
+                        "recovery_suggestion": suggestion,
+                    }
+                    failures.append(failure)
+
+                    source = (
+                        final_result.get("source")
+                        if final_result else None
+                    ) or ("mcp" if tool_name.startswith("mcp__") else "local")
+
                     self._emit(
-                        event_callback, task_id, step_id, "failed",
-                        f"Step failed: {error}"
+                        event_callback,
+                        task_id,
+                        step_id,
+                        "failed",
+                        f"Step failed: {error}",
+                        recovery_suggestion=suggestion,
+                        attempts=attempts,
+                        source=source,
+                        mcp_server=(
+                            final_result.get("mcp_server")
+                            if final_result else None
+                        ),
                     )
 
         status = "completed" if not failures else "failed"

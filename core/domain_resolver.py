@@ -2,7 +2,11 @@
 from typing import Any
 from functools import lru_cache
 
-from sentence_transformers import SentenceTransformer, util
+try:
+    from sentence_transformers import SentenceTransformer, util
+except ImportError:
+    SentenceTransformer = None
+    util = None
 
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
@@ -44,8 +48,12 @@ MIN_MARGIN = 0.05
 
 
 @lru_cache(maxsize=1)
-def _load_model() -> SentenceTransformer:
+def _load_model():
     """Load the model once and reuse it."""
+    if SentenceTransformer is None:
+        raise ImportError(
+            "sentence_transformers is not installed. Please install it to use semantic domain resolution."
+        )
     return SentenceTransformer(MODEL_NAME)
 
 

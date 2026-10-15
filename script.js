@@ -1,495 +1,484 @@
-const $ = (id) => document.getElementById(id);
+
+"use strict";
+
+const API_BASE = "";
 
 const state = {
-  goal: "",
-  files: [],
-  planCreated: false,
-  approved: false,
-  running: false,
-  finished: false,
-  cancelled: false,
-  retries: 0,
-  completed: 0,
-  logs: [],
-  results: [],
-  timerIds: []
+    plan: null,
+    running: false,
+    backendOnline: false,
+    selectedFiles: []
 };
 
-const steps = [
-  {
-    title: "Read the input file",
-    description: "Locate and prepare the supplied data for analysis.",
-    tool: "read_file",
-    output: "Input preparation"
-  },
-  {
-    title: "Analyze the data",
-    description: "Identify trends and calculate the largest sales declines.",
-    tool: "analyze_csv",
-    output: "Analysis summary"
-  },
-  {
-    title: "Create the report",
-    description: "Compile the findings, explanations, and supporting evidence.",
-    tool: "create_report",
-    output: "Report draft"
-  },
-  {
-    title: "Verify and save results",
-    description: "Check the expected output and prepare the report for download.",
-    tool: "read_saved_report",
-    output: "Verification summary"
-  }
-];
+const $ = (id) => document.getElementById(id);
 
-const criteria = [
-  "A report preview is available.",
-  "The requested findings are included in the report.",
-  "Verification checks have been completed.",
-  "The report can be downloaded."
-];
+async function api(path, options = {}) {
+    const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+        }
+    });
 
-function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[char]);
-}
+    let data;
 
-function toast(message) {
-  const element = $("toast");
-  element.textContent = message;
-  element.classList.add("show");
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => element.classList.remove("show"), 2800);
-}
-
-function showPage(page) {
-  const pages = {
-    home: "Welcome to OmniWeave",
-    plan: "Dynamic Plan",
-    execution: "Live Execution",
-    results: "Results & Verification",
-    tools: "Tools & Activity"
-  };
-
-  document.querySelectorAll(".page").forEach((element) => {
-    element.classList.toggle("active", element.id === `page-${page}`);
-  });
-
-  document.querySelectorAll(".nav-item").forEach((element) => {
-    element.classList.toggle("active", element.dataset.page === page);
-  });
-
-  $("page-heading").textContent = pages[page] || "OmniWeave";
-}
-
-document.querySelectorAll(".nav-item").forEach((button) => {
-  button.addEventListener("click", () => showPage(button.dataset.page));
-});
-
-document.querySelector(".brand").addEventListener("click", (event) => {
-  event.preventDefault();
-  showPage("home");
-});
-
-$("goal-input").addEventListener("input", () => {
-  $("char-count").textContent =
-    `${$("goal-input").value.length} characters`;
-});
-
-$("file-input").addEventListener("change", (event) => {
-  state.files = Array.from(event.target.files || []);
-
-  $("file-list").innerHTML = state.files.map((file) =>
-    `<span class="file-chip">▤ ${escapeHTML(file.name)} · ${formatBytes(file.size)}</span>`
-  ).join("");
-
-  if (state.files.length) {
-    addLog(`Selected ${state.files.length} file(s) for the demo.`);
-  }
-});
-
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function addLog(message) {
-  const entry = {
-    time: new Date().toLocaleTimeString(),
-    message
-  };
-
-  state.logs.unshift(entry);
-  renderLogs();
-}
-
-function renderLogs() {
-  $("activity-log").innerHTML = state.logs.length
-    ? state.logs.map((entry) =>
-        `<p class="log-line"><span class="log-time">${escapeHTML(entry.time)}</span><span>●</span>${escapeHTML(entry.message)}</p>`
-      ).join("")
-    : '<div class="empty-state">No activity recorded yet.</div>';
-
-  $("audit-trail").innerHTML = state.logs.length
-    ? state.logs.map((entry) =>
-        `<div class="audit-entry"><time>${escapeHTML(entry.time)}</time><p>${escapeHTML(entry.message)}</p></div>`
-      ).join("")
-    : '<div class="empty-state">No activity recorded yet.</div>';
-
-  $("audit-count").textContent = state.logs.length;
-}
-
-function createPlan() {
-  const goal = $("goal-input").value.trim();
-
-  if (!goal) {
-    toast("Please enter a goal first.");
-    $("goal-input").focus();
-    return;
-  }
-
-  if (state.running) {
-    toast("Wait for the current demo to finish.");
-    return;
-  }
-
-  clearTimers();
-
-  state.goal = goal;
-  state.planCreated = true;
-  state.approved = false;
-  state.finished = false;
-  state.cancelled = false;
-  state.completed = 0;
-  state.retries = 0;
-  state.results = [];
-
-  $("plan-goal").textContent = state.goal;
-  $("plan-status").textContent = "Draft";
-  $("step-count").textContent = `${steps.length} steps`;
-
-  $("plan-steps").innerHTML = steps.map((step, index) => `
-    <article class="workflow-step">
-      <div class="step-number">${String(index + 1).padStart(2, "0")}</div>
-      <div class="step-body">
-        <h4>${escapeHTML(step.title)}</h4>
-        <p>${escapeHTML(step.description)}</p>
-        <div class="step-meta">
-          <span class="tool-tag">⌘ ${escapeHTML(step.tool)}</span>
-          <span class="pill">Expected: ${escapeHTML(step.output)}</span>
-        </div>
-      </div>
-      <span class="pill">Pending</span>
-    </article>
-  `).join("");
-
-  $("criteria-list").innerHTML = criteria.map((criterion) =>
-    `<li>${escapeHTML(criterion)}</li>`
-  ).join("");
-
-  $("approve-plan").disabled = false;
-  $("run-demo").disabled = true;
-  $("execution-status").textContent = "Idle";
-
-  updateProgress();
-  renderExecutionSteps();
-  resetResults();
-
-  addLog("A draft plan was created from the submitted goal.");
-  showPage("plan");
-  toast("Demo plan created. Review it before approving.");
-}
-
-function resetResults() {
-  $("result-symbol").textContent = "◌";
-  $("result-heading").textContent = "No results yet";
-  $("result-description").textContent =
-    "Run the demo execution to see verification results.";
-
-  $("verification-list").innerHTML =
-    '<div class="empty-state">Verification checks will appear after demo execution.</div>';
-
-  $("report-preview").textContent =
-    "Your demo report will appear here after execution.";
-
-  $("download-report").disabled = true;
-}
-
-$("generate-plan").addEventListener("click", createPlan);
-
-$("edit-plan").addEventListener("click", () => {
-  showPage("home");
-  $("goal-input").focus();
-});
-
-$("cancel-plan").addEventListener("click", () => {
-  if (state.running) {
-    toast("Reset the demo before cancelling an active run.");
-    return;
-  }
-
-  state.planCreated = false;
-  state.approved = false;
-  state.cancelled = true;
-
-  $("plan-status").textContent = "Cancelled";
-  $("approve-plan").disabled = true;
-  $("run-demo").disabled = true;
-
-  addLog("The draft plan was cancelled.");
-  toast("Plan cancelled.");
-});
-
-$("approve-plan").addEventListener("click", () => {
-  if (!state.planCreated || state.cancelled) {
-    toast("Generate a plan first.");
-    return;
-  }
-
-  state.approved = true;
-  $("plan-status").textContent = "Approved";
-  $("execution-status").textContent = "Ready";
-  $("run-demo").disabled = false;
-
-  addLog("Plan approved by the user.");
-  renderExecutionSteps();
-  showPage("execution");
-  toast("Plan approved. Start the demo when ready.");
-});
-
-function renderExecutionSteps() {
-  $("execution-steps").innerHTML = steps.map((step, index) => {
-    let status = "Pending";
-    let number = String(index + 1).padStart(2, "0");
-
-    if (index < state.completed) {
-      status = "Completed";
-      number = "✓";
-    } else if (state.running && index === state.completed) {
-      status = "Running";
-      number = "↻";
-    } else if (state.finished && state.completed === steps.length) {
-      status = "Completed";
-      number = "✓";
+    try {
+        data = await response.json();
+    } catch {
+        throw new Error("The server returned an invalid response.");
     }
 
-    return `
-      <article class="workflow-step">
-        <div class="step-number">${number}</div>
-        <div class="step-body">
-          <h4>${escapeHTML(step.title)}</h4>
-          <p>${escapeHTML(step.description)}</p>
-          <div class="step-meta"><span class="tool-tag">${escapeHTML(step.tool)}</span></div>
-        </div>
-        <span class="pill">${status}</span>
-      </article>
-    `;
-  }).join("");
+    if (!response.ok) {
+        throw new Error(data.message || data.error || `Request failed (${response.status}).`);
+    }
+
+    return data;
 }
 
-function updateProgress() {
-  const percent = Math.round((state.completed / steps.length) * 100);
-
-  $("progress-number").textContent = `${percent}%`;
-  $("progress-bar").style.width = `${percent}%`;
-  $("completed-number").textContent = `${state.completed} / ${steps.length}`;
-  $("recovery-number").textContent = state.retries;
+function setText(id, value) {
+    const element = $(id);
+    if (element) element.textContent = value ?? "";
 }
 
-function wait(ms, callback) {
-  const timer = setTimeout(() => {
-    state.timerIds = state.timerIds.filter((id) => id !== timer);
-    callback();
-  }, ms);
+function showMessage(message) {
+    const log = $("activity-log");
 
-  state.timerIds.push(timer);
+    if (log) {
+        const item = document.createElement("div");
+        item.className = "activity-item";
+        item.textContent = `${new Date().toLocaleTimeString()} — ${message}`;
+        log.prepend(item);
+    }
+
+    console.log(`[OmniWeave] ${message}`);
 }
 
-function clearTimers() {
-  state.timerIds.forEach(clearTimeout);
-  state.timerIds = [];
+function setBackendStatus(online) {
+    state.backendOnline = online;
+
+    const connection = document.querySelector(".connection");
+
+    if (connection) {
+        connection.classList.toggle("online", online);
+        connection.classList.toggle("offline", !online);
+        connection.setAttribute("title", online ? "Backend connected" : "Backend unavailable");
+    }
+
+    const label = document.querySelector(".backend-label");
+    if (label) {
+        label.textContent = online ? "Backend connected" : "Backend offline";
+    }
 }
 
-function runStep(index) {
-  if (!state.running) return;
+async function checkBackend() {
+    try {
+        const result = await api("/api/health");
+        setBackendStatus(result.status === "online" || result.success === true);
+        showMessage("Backend connection checked.");
+    } catch (error) {
+        setBackendStatus(false);
+        showMessage(`Backend unavailable: ${error.message}`);
+    }
+}
 
-  if (index >= steps.length) {
-    finishExecution();
-    return;
-  }
+function getGoal() {
+    return ($("goal-input")?.value || "").trim();
+}
 
-  const step = steps[index];
+function setBusy(busy) {
+    state.running = busy;
 
-  renderExecutionSteps();
-  $("execution-status").textContent = "Running";
-  addLog(`Started step ${index + 1}: ${step.title} (${step.tool}).`);
-
-  // Demonstrate recovery once on the analysis step.
-  if (index === 1 && state.retries === 0) {
-    wait(900, () => {
-      if (!state.running) return;
-
-      state.retries = 1;
-      updateProgress();
-      addLog("Simulated tool failure: temporary analysis error.");
-      addLog("Recovery: retrying the analysis step.");
-
-      wait(1000, () => {
-        if (!state.running) return;
-        completeStep(index);
-      });
+    ["generate-plan", "approve-plan", "run-demo", "reset-demo"].forEach((id) => {
+        const button = $(id);
+        if (button) button.disabled = busy;
     });
-    return;
-  }
-
-  wait(1100, () => {
-    if (!state.running) return;
-    completeStep(index);
-  });
 }
 
-function completeStep(index) {
-  if (!state.running) return;
+function renderPlan(plan) {
+    state.plan = plan;
 
-  state.completed = index + 1;
-  updateProgress();
-  renderExecutionSteps();
-  addLog(`Completed step ${index + 1}: ${steps[index].title}.`);
+    const steps = plan?.steps || [];
 
-  runStep(index + 1);
+    setText("plan-goal", plan?.goal || getGoal());
+    setText("plan-status", plan?.status || "ready");
+    setText("step-count", String(steps.length));
+
+    const container = $("plan-steps");
+
+    if (container) {
+        container.replaceChildren();
+
+        steps.forEach((step, index) => {
+            const card = document.createElement("div");
+            card.className = "step-card";
+
+            const heading = document.createElement("h4");
+            heading.textContent =
+                `${index + 1}. ${step.purpose || step.description || step.tool_name || step.id || step.step_id || "Workflow step"}`;
+
+            const detail = document.createElement("p");
+            detail.textContent = `Tool: ${step.tool_name || "Not specified"}`;
+
+            const dependencies = document.createElement("p");
+            dependencies.textContent = `Dependencies: ${(step.dependencies || []).join(", ") || "None"}`;
+
+            card.append(heading, detail, dependencies);
+            container.appendChild(card);
+        });
+    }
+
+    const criteria = $("criteria-list");
+
+    if (criteria) {
+        criteria.replaceChildren();
+
+        const allCriteria = steps.flatMap(
+            (step) => step.acceptance_criteria || []
+        );
+
+        (allCriteria.length ? allCriteria : [
+            "Workflow plan received from the backend.",
+            "Tool execution results will be checked.",
+            "Generated report will be verified."
+        ]).forEach((criterion) => {
+            const item = document.createElement("li");
+            item.textContent = criterion;
+            criteria.appendChild(item);
+        });
+    }
+
+    showMessage(`Plan generated with ${steps.length} steps.`);
 }
 
-function finishExecution() {
-  state.running = false;
-  state.finished = true;
+async function createPlan() {
+    const goal = getGoal();
 
-  $("execution-status").textContent = "Completed";
-  $("run-demo").disabled = true;
+    if (!goal) {
+        showMessage("Enter a goal before generating a plan.");
+        $("goal-input")?.focus();
+        return;
+    }
 
-  updateProgress();
-  renderExecutionSteps();
+    setBusy(true);
 
-  addLog("All demo steps completed.");
-  addLog("Verification checks completed in demo mode.");
+    try {
+        const result = await api("/api/plan", {
+            method: "POST",
+            body: JSON.stringify({ goal })
+        });
 
-  createDemoResults();
-  showPage("results");
-  toast("Demo finished. Review the results and verification.");
+        if (!result.success || !result.plan) {
+            throw new Error(result.message || "The backend did not return a plan.");
+        }
+
+        renderPlan(result.plan);
+
+        if ($("plan-status")) {
+            $("plan-status").textContent = "Ready for approval";
+        }
+
+        showMessage("Review the generated plan, then approve it to execute.");
+    } catch (error) {
+        showMessage(`Plan generation failed: ${error.message}`);
+        alert(`Could not generate plan.\n\n${error.message}`);
+    } finally {
+        setBusy(false);
+    }
 }
 
-function createDemoResults() {
-  $("result-symbol").textContent = "✓";
-  $("result-heading").textContent = "Demo completed";
-  $("result-description").textContent =
-    "The simulated workflow finished. The following checks represent demo evidence, not real analysis of your uploaded files.";
+function renderExecution(result) {
+    const execution = result.execution || result;
+    const steps = execution.steps || result.step_results || [];
+    const events = result.events || execution.events || [];
+    const completed = execution.completed_step_ids?.length
+        ?? execution.completed_steps
+        ?? steps.filter((step) => step.status === "completed" || step.success).length;
 
-  $("verification-list").innerHTML = criteria.map((criterion) => `
-    <div class="verify-row">
-      <span class="verify-symbol">✓</span>
-      <div>
-        <strong>${escapeHTML(criterion)}</strong>
-        <p>Passed in the front-end demonstration. This is not an independent backend verification.</p>
-      </div>
-    </div>
-  `).join("");
+    setText("execution-status", execution.status || result.status || "Completed");
+    setText("completed-number", String(completed));
+    setText("progress-number", `${completed}/${steps.length || state.plan?.steps?.length || 0}`);
 
-  const report = [
-    "# OmniWeave Demo Report",
-    "",
-    "## Submitted goal",
-    state.goal,
-    "",
-    "## Workflow status",
-    "Demo steps completed: 4 of 4",
-    `Simulated recovery events: ${state.retries}`,
-    "",
-    "## Findings",
-    "This is a demonstration report. No uploaded dataset was analyzed.",
-    "Connect the Python analysis backend to generate real findings.",
-    "",
-    "## Verification",
-    ...criteria.map((criterion) => `- [x] ${criterion} (simulated)`),
-    "",
-    "## Audit",
-    ...state.logs.slice().reverse().map((entry) =>
-      `- ${entry.time}: ${entry.message}`
-    )
-  ].join("\n");
+    const total = steps.length || state.plan?.steps?.length || 1;
+    const percent = Math.min(100, Math.round((Number(completed) / total) * 100));
 
-  $("report-preview").textContent = report;
-  $("download-report").disabled = false;
+    const bar = $("progress-bar");
+    if (bar) {
+        bar.style.width = `${percent}%`;
+        bar.setAttribute("aria-valuenow", String(percent));
+    }
+
+    const container = $("execution-steps");
+
+    if (container) {
+        container.replaceChildren();
+
+        steps.forEach((step, index) => {
+            const card = document.createElement("div");
+            card.className = "execution-step";
+
+            const heading = document.createElement("h4");
+            heading.textContent =
+                `${index + 1}. ${step.tool_name || step.id || step.step_id || step.name || "Step"}`;
+
+            const detail = document.createElement("p");
+            detail.textContent =
+                `Status: ${step.status || (step.success ? "completed" : "processed")}`;
+
+            card.append(heading, detail);
+            container.appendChild(card);
+        });
+
+        if (!steps.length) {
+            const message = document.createElement("p");
+            message.textContent = "Execution response received from backend.";
+            container.appendChild(message);
+        }
+    }
+
+    const activity = $("activity-log");
+
+    if (activity && events.length) {
+        activity.replaceChildren();
+
+        events.forEach((event) => {
+            const item = document.createElement("div");
+            item.className = "activity-item";
+            item.textContent = typeof event === "string"
+                ? event
+                : JSON.stringify(event);
+
+            activity.appendChild(item);
+        });
+    }
+
+    renderResults(result);
 }
 
-$("run-demo").addEventListener("click", () => {
-  if (!state.approved || state.running) return;
+function renderResults(result) {
+    const verified = result.report_verified === true ||
+        result.verification?.success === true;
 
-  state.running = true;
-  state.finished = false;
-  state.completed = 0;
-  state.retries = 0;
+    setText("result-heading", verified ? "Workflow verified" : "Workflow finished");
+    setText(
+        "result-description",
+        verified
+            ? "The backend reports that the generated report passed verification."
+            : "Review the execution output and report below."
+    );
 
-  $("run-demo").disabled = true;
-  $("execution-status").textContent = "Running";
+    const symbol = $("result-symbol");
+    if (symbol) symbol.textContent = verified ? "✓" : "•";
 
-  updateProgress();
-  renderExecutionSteps();
+    const checks = $("verification-list");
 
-  addLog("Demo execution started.");
-  runStep(0);
+    if (checks) {
+        checks.replaceChildren();
+
+        [
+            ["Execution completed", result.execution?.status === "completed" || result.status === "completed"],
+            ["Report verified", verified],
+            ["Report content available", Boolean(result.report)]
+        ].forEach(([label, passed]) => {
+            const item = document.createElement("li");
+            item.textContent = `${passed ? "✓" : "○"} ${label}`;
+            checks.appendChild(item);
+        });
+    }
+
+    const preview = $("report-preview");
+    if (preview) {
+        preview.textContent = result.report ||
+            "No report content was returned. Check the backend terminal and output folder.";
+    }
+
+    const download = $("download-report");
+
+    if (download) {
+        download.disabled = !result.report;
+
+        download.onclick = () => {
+            if (!result.report) return;
+
+            const blob = new Blob([result.report], {
+                type: "text/plain;charset=utf-8"
+            });
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            link.href = url;
+            link.download = "omniweave_report.txt";
+            link.click();
+
+            URL.revokeObjectURL(url);
+        };
+    }
+}
+
+async function runWorkflow() {
+    const goal = getGoal();
+
+    if (!goal) {
+        showMessage("Enter a goal first.");
+        return;
+    }
+
+    if (!state.plan) {
+        showMessage("Generate and review a plan before execution.");
+        return;
+    }
+
+    setBusy(true);
+    showMessage("Sending workflow to the backend for execution.");
+
+    try {
+        const result = await api("/api/run", {
+            method: "POST",
+            body: JSON.stringify({ goal })
+        });
+
+        renderExecution(result);
+
+        if (result.success === false) {
+            showMessage(result.message || "The backend reported an execution failure.");
+        } else {
+            showMessage("Backend execution response received.");
+        }
+    } catch (error) {
+        showMessage(`Execution failed: ${error.message}`);
+        alert(`Workflow execution failed.\n\n${error.message}`);
+    } finally {
+        setBusy(false);
+    }
+}
+
+function resetDemo() {
+    state.plan = null;
+
+    const goal = $("goal-input");
+    if (goal) goal.value = "";
+
+    [
+        "plan-goal",
+        "plan-steps",
+        "criteria-list",
+        "execution-steps",
+        "report-preview",
+        "verification-list",
+        "activity-log"
+    ].forEach((id) => {
+        const element = $(id);
+        if (element) {
+            if (id === "plan-steps" || id === "criteria-list" ||
+                id === "execution-steps" || id === "verification-list" ||
+                id === "activity-log") {
+                element.replaceChildren();
+            } else {
+                element.textContent = "";
+            }
+        }
+    });
+
+    setText("plan-status", "Not started");
+    setText("step-count", "0");
+    setText("completed-number", "0");
+    setText("progress-number", "0/0");
+    setText("execution-status", "Idle");
+    setText("result-heading", "Awaiting execution");
+    setText("result-description", "Generate a plan to begin.");
+
+    const bar = $("progress-bar");
+    if (bar) bar.style.width = "0%";
+
+    showMessage("Dashboard reset. Backend data and saved reports have not been deleted.");
+}
+
+function setupFilePicker() {
+    const picker = $("file-input");
+    const list = $("file-list");
+
+    if (!picker) return;
+
+    picker.addEventListener("change", () => {
+        state.selectedFiles = Array.from(picker.files || []);
+
+        if (list) {
+            list.replaceChildren();
+
+            state.selectedFiles.forEach((file) => {
+                const item = document.createElement("div");
+                item.textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
+                list.appendChild(item);
+            });
+        }
+
+        if (state.selectedFiles.length) {
+            showMessage(
+                "Files selected in the browser. This version does not upload them; the backend uses its configured dataset."
+            );
+        }
+    });
+}
+
+function setupNavigation() {
+    document.querySelectorAll("[data-page]").forEach((element) => {
+        element.addEventListener("click", () => {
+            const page = element.dataset.page;
+
+            document.querySelectorAll("[data-page]").forEach((nav) => {
+                nav.classList.toggle("active", nav === element);
+            });
+
+            document.querySelectorAll(".page").forEach((section) => {
+                section.classList.toggle(
+                    "active",
+                    section.id === page || section.id === `page-${page}`
+                );
+            });
+        });
+    });
+}
+
+function setupCharacterCount() {
+    const input = $("goal-input");
+    const count = $("char-count");
+
+    if (!input || !count) return;
+
+    const update = () => {
+        count.textContent = String(input.value.length);
+    };
+
+    input.addEventListener("input", update);
+    update();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    $("generate-plan")?.addEventListener("click", createPlan);
+    $("approve-plan")?.addEventListener("click", runWorkflow);
+    $("run-demo")?.addEventListener("click", runWorkflow);
+    $("reset-demo")?.addEventListener("click", resetDemo);
+
+    $("edit-plan")?.addEventListener("click", () => {
+        $("goal-input")?.focus();
+        showMessage("Edit the goal and generate the plan again.");
+    });
+
+    $("cancel-plan")?.addEventListener("click", () => {
+        state.plan = null;
+        showMessage("Plan approval cancelled.");
+    });
+
+    $("clear-log")?.addEventListener("click", () => {
+        $("audit-trail")?.replaceChildren();
+        $("activity-log")?.replaceChildren();
+        showMessage("Visible activity log cleared.");
+    });
+
+    setupFilePicker();
+    setupNavigation();
+    setupCharacterCount();
+
+    checkBackend();
 });
-
-$("reset-demo").addEventListener("click", () => {
-  clearTimers();
-
-  state.running = false;
-  state.finished = false;
-  state.approved = false;
-  state.completed = 0;
-  state.retries = 0;
-  state.results = [];
-
-  $("run-demo").disabled = true;
-  $("approve-plan").disabled = !state.planCreated;
-  $("execution-status").textContent = "Idle";
-
-  updateProgress();
-  renderExecutionSteps();
-  resetResults();
-
-  addLog("Demo execution state reset.");
-  toast("Execution reset. You can approve and run the plan again.");
-});
-
-$("download-report").addEventListener("click", () => {
-  if (!state.finished) return;
-
-  const report = $("report-preview").textContent;
-  const blob = new Blob([report], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = "sales_analysis_report.md";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-
-  addLog("Downloaded the demo report.");
-  toast("Demo report downloaded.");
-});
-
-$("clear-log").addEventListener("click", () => {
-  state.logs = [];
-  renderLogs();
-  toast("Audit trail cleared.");
-});
-
-renderLogs();
-updateProgress();

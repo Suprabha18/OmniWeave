@@ -1,4 +1,5 @@
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,9 +12,9 @@ from storage.state_manager import StateManager
 class TestRecovery(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(self.temp_dir.name) / "test.db"
+        self.db_path = Path(self.temp_dir.name) / "test.db"
 
-        self.state_manager = StateManager(db_path)
+        self.state_manager = StateManager(self.db_path)
         self.orchestrator = Orchestrator(
             state_manager=self.state_manager,
             recovery_manager=RecoveryManager(max_retries=2),
@@ -70,10 +71,7 @@ class TestRecovery(unittest.TestCase):
 
         def fake_tool(tool_name, arguments):
             calls["count"] += 1
-            return {
-                "success": True,
-                "output": {"message": "Done"},
-            }
+            return {"success": True, "output": {"message": "Done"}}
 
         first = self.orchestrator.execute_plan(self.plan, fake_tool)
 
@@ -204,10 +202,7 @@ class TestRecovery(unittest.TestCase):
             "acceptance_criteria": [],
         }
 
-        result = self.orchestrator.execute_plan(
-            plan,
-            invoke_tool=fake_tool,
-        )
+        result = self.orchestrator.execute_plan(plan, invoke_tool=fake_tool)
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(
@@ -225,13 +220,9 @@ class TestRecovery(unittest.TestCase):
             attempts=1,
             result={"message": "Analysis completed"},
         )
-
         self.state_manager.set_task_status(task_id, "completed")
 
-        # Open a new StateManager using the same database file.
-        db_path = Path(self.temp_dir.name) / "test.db"
-        reopened_manager = StateManager(db_path)
-
+        reopened_manager = StateManager(self.db_path)
         saved_task = reopened_manager.get_task(task_id)
         completed_steps = reopened_manager.get_completed_step_ids(task_id)
 
@@ -244,8 +235,10 @@ class TestRecovery(unittest.TestCase):
 
         self.assertEqual(step["status"], "completed")
         self.assertEqual(step["attempts"], 1)
-        self.assertEqual(step["result"], {"message": "Analysis completed"})
-
+        self.assertEqual(
+            step["result"],
+            {"message": "Analysis completed"},
+        )
 
     def test_resume_after_failure_skips_completed_step(self):
         plan = {
@@ -281,7 +274,7 @@ class TestRecovery(unittest.TestCase):
             if tool_name == "generate_report":
                 return {
                     "success": False,
-                    "error": "Temporary report failure",
+                    "error": "Report generation failed",
                     "retryable": False,
                 }
 
@@ -343,6 +336,104 @@ class TestRecovery(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.orchestrator.execute_plan(plan, should_not_run)
+
+    def test_checkpoint_is_saved_and_retrieved(self):
+        task_id = self.state_manager.create_task(self.plan)
+
+        checkpoint_state = {
+            "phase": "analysis",
+            "completed": True,
+            "findings": ["Product A sales declined"],
+        }
+
+        self.state_manager.save_checkpoint(
+            task_id, "step_1", checkpoint_state
+        )
+
+        checkpoints = self.state_manager.get_checkpoints(task_id)
+
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0]["task_id"], task_id)
+        self.assertEqual(checkpoints[0]["step_id"], "step_1")
+        self.assertEqual(checkpoints[0]["state"], checkpoint_state)
+
+    def test_audit_event_is_saved_and_retrieved(self):
+        task_id = self.state_manager.create_task(self.plan)
+        details = {"phase": "analysis", "attempt": 1}
+
+        self.state_manager.audit(
+            task_id,
+            "step_1",
+            "test_event",
+            "Analysis step started",
+            details,
+        )
+
+        events = self.state_manager.get_events(task_id)
+        matching_events = [
+            event for event in events
+            if event["event_type"] == "test_event"
+        ]
+
+        self.assertEqual(len(matching_events), 1)
+        self.assertEqual(matching_events[0]["task_id"], task_id)
+        self.assertEqual(matching_events[0]["step_id"], "step_1")
+        self.assertEqual(
+            matching_events[0]["message"],
+            "Analysis step started",
+        )
+        self.assertEqual(
+            json.loads(matching_events[0]["details_json"]),
+            details,
+        )
+
+    def test_tool_call_history_is_saved_and_retrieved(self):
+        task_id = self.state_manager.create_task(self.plan)
+        arguments = {"file_path": "sales.csv"}
+        result = {
+            "success": True,
+            "output": {"rows_analyzed": 100},
+        }
+
+        self.state_manager.record_tool_call(
+            task_id=task_id,
+            step_id="step_1",
+            tool_name="analyze_data",
+            attempt=1,
+            arguments=arguments,
+            result=result,
+        )
+
+        calls = self.state_manager.get_tool_calls(task_id)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["task_id"], task_id)
+        self.assertEqual(calls[0]["step_id"], "step_1")
+        self.assertEqual(calls[0]["tool_name"], "analyze_data")
+        self.assertEqual(calls[0]["attempt"], 1)
+        self.assertEqual(
+            json.loads(calls[0]["arguments_json"]),
+            arguments,
+        )
+        self.assertEqual(
+            json.loads(calls[0]["result_json"]),
+            result,
+        )
+
+    def test_recovery_rejects_negative_retry_limit(self):
+        with self.assertRaises(ValueError):
+            RecoveryManager(max_retries=-1)
+
+    def test_recovery_does_not_retry_non_retryable_error(self):
+        recovery = RecoveryManager(max_retries=3)
+        result = {
+            "success": False,
+            "error": "Invalid input",
+            "retryable": False,
+        }
+
+        self.assertFalse(recovery.should_retry(result, attempt=1))
+        self.assertEqual(recovery.next_action(result, attempt=1), "fail")
 
 
 if __name__ == "__main__":
