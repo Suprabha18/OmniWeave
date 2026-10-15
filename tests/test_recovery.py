@@ -247,5 +247,103 @@ class TestRecovery(unittest.TestCase):
         self.assertEqual(step["result"], {"message": "Analysis completed"})
 
 
+    def test_resume_after_failure_skips_completed_step(self):
+        plan = {
+            "goal": "Test recovery after partial completion",
+            "steps": [
+                {
+                    "id": "step_1",
+                    "description": "Analyze data",
+                    "tool_name": "analyze_data",
+                    "arguments": {},
+                    "dependencies": [],
+                    "expected_output": "Analysis results",
+                    "acceptance_criteria": [],
+                },
+                {
+                    "id": "step_2",
+                    "description": "Generate report",
+                    "tool_name": "generate_report",
+                    "arguments": {},
+                    "dependencies": ["step_1"],
+                    "expected_output": "Report",
+                    "acceptance_criteria": [],
+                },
+            ],
+            "acceptance_criteria": [],
+        }
+
+        calls = {"analyze_data": 0, "generate_report": 0}
+
+        def first_attempt(tool_name, arguments):
+            calls[tool_name] += 1
+
+            if tool_name == "generate_report":
+                return {
+                    "success": False,
+                    "error": "Temporary report failure",
+                    "retryable": False,
+                }
+
+            return {
+                "success": True,
+                "output": {"message": "Analysis completed"},
+            }
+
+        first = self.orchestrator.execute_plan(plan, first_attempt)
+
+        self.assertEqual(first["status"], "failed")
+        self.assertEqual(calls["analyze_data"], 1)
+
+        def second_attempt(tool_name, arguments):
+            calls[tool_name] += 1
+            return {
+                "success": True,
+                "output": {"message": "Report generated"},
+            }
+
+        resumed = self.orchestrator.execute_plan(
+            plan,
+            second_attempt,
+            task_id=first["task_id"],
+        )
+
+        self.assertEqual(resumed["status"], "completed")
+        self.assertEqual(calls["analyze_data"], 1)
+        self.assertEqual(calls["generate_report"], 2)
+
+    def test_circular_dependencies_are_rejected(self):
+        plan = {
+            "goal": "Test circular dependency rejection",
+            "steps": [
+                {
+                    "id": "step_1",
+                    "description": "First step",
+                    "tool_name": "first",
+                    "arguments": {},
+                    "dependencies": ["step_2"],
+                    "expected_output": "First result",
+                    "acceptance_criteria": [],
+                },
+                {
+                    "id": "step_2",
+                    "description": "Second step",
+                    "tool_name": "second",
+                    "arguments": {},
+                    "dependencies": ["step_1"],
+                    "expected_output": "Second result",
+                    "acceptance_criteria": [],
+                },
+            ],
+            "acceptance_criteria": [],
+        }
+
+        def should_not_run(tool_name, arguments):
+            self.fail("A tool must not run for a circular plan")
+
+        with self.assertRaises(ValueError):
+            self.orchestrator.execute_plan(plan, should_not_run)
+
+
 if __name__ == "__main__":
     unittest.main()
